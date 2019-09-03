@@ -4,6 +4,7 @@ var chai = require('chai'),
     sinonChai = require('sinon-chai'),
     nock = require('nock'),
     rewire = require('rewire'),
+    path = require('path'),
     Amperize = rewire('../lib/amperize'),
     amperize;
 
@@ -42,7 +43,13 @@ describe('Amperize', function () {
                     width: 600,
                     height: 400,
                     sandbox: 'allow-scripts allow-same-origin'
-                }
+                },
+                'amp-youtube': {
+                    layout: 'responsive',
+                    width: 600,
+                    height: 400
+                },
+                'request_timeout': 3000
             });
         });
 
@@ -69,12 +76,17 @@ describe('Amperize', function () {
     });
 
     describe('#parse', function () {
-        var sizeOfMock,
-            sizeOfStub;
+        var resetProbeImageSize,
+            imageSizeMock,
+            probeImageSizeStub;
 
         beforeEach(function () {
-            // stubbing the `image-size` lib, so we don't to a request everytime
-            sizeOfStub = sinon.stub();
+            // reset rewire so tests are independent
+            if (resetProbeImageSize) {
+                resetProbeImageSize();
+            }
+            // stubbing the `probe-probe-image-size` lib, so we don't make a request everytime
+            probeImageSizeStub = sinon.stub();
         });
 
         afterEach(function () {
@@ -90,14 +102,14 @@ describe('Amperize', function () {
         });
 
         it('transforms small <img> into <amp-img></amp-img> with full image dimensions and fixed layout', function (done) {
-            sizeOfMock = nock('http://static.wixstatic.com')
+            imageSizeMock = nock('http://static.wixstatic.com')
                 .get('/media/355241_d31358572a2542c5a44738ddcb59e7ea.jpg_256')
                 .reply(200, {
                     body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
                 });
 
-            sizeOfStub.returns({width: 50, height: 50, type: 'jpg'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+            probeImageSizeStub.returns(Promise.resolve({width: 50, height: 50, type: 'jpg'}));
+            resetProbeImageSize = Amperize.__set__('probeImageSize', probeImageSizeStub);
 
             amperize.parse('<img src="http://static.wixstatic.com/media/355241_d31358572a2542c5a44738ddcb59e7ea.jpg_256">', function (error, result) {
                 expect(result).to.exist;
@@ -112,14 +124,14 @@ describe('Amperize', function () {
         });
 
         it('transforms big <img> into <amp-img></amp-img> with full image dimensions and responsive layout', function (done) {
-            sizeOfMock = nock('http://static.wixstatic.com')
+            imageSizeMock = nock('http://static.wixstatic.com')
                 .get('/media/355241_d31358572a2542c5a44738ddcb59e7ea.jpg_256')
                 .reply(200, {
                     body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
                 });
 
-            sizeOfStub.returns({width: 350, height: 200, type: 'jpg'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+            probeImageSizeStub.returns(Promise.resolve({width: 350, height: 200, type: 'jpg'}));
+            resetProbeImageSize = Amperize.__set__('probeImageSize', probeImageSizeStub);
 
             amperize.parse('<img src="http://static.wixstatic.com/media/355241_d31358572a2542c5a44738ddcb59e7ea.jpg_256">', function (error, result) {
                 expect(result).to.exist;
@@ -134,14 +146,14 @@ describe('Amperize', function () {
         });
 
         it('transforms <img> into <amp-img></amp-img> when width and height is set and overwrites it', function (done) {
-            sizeOfMock = nock('http://somestockwebsite.com')
+            imageSizeMock = nock('http://somestockwebsite.com')
                 .get('/image.jpg')
                 .reply(200, {
                     body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
                 });
 
-            sizeOfStub.returns({width: 350, height: 200, type: 'jpg'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+            probeImageSizeStub.returns(Promise.resolve({width: 350, height: 200, type: 'jpg'}));
+            resetProbeImageSize = Amperize.__set__('probeImageSize', probeImageSizeStub);
 
             amperize.parse('<img src="http://somestockwebsite.com/image.jpg" width="100" height="50">', function (error, result) {
                 expect(result).to.exist;
@@ -156,14 +168,14 @@ describe('Amperize', function () {
         });
 
         it('transforms <img> into <amp-img></amp-img> does not overwrite layout attribute', function (done) {
-            sizeOfMock = nock('http://somestockwebsite.com')
+            imageSizeMock = nock('http://somestockwebsite.com')
                 .get('/image.jpg')
                 .reply(200, {
                     body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
                 });
 
-            sizeOfStub.returns({width: 350, height: 200, type: 'jpg'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+            probeImageSizeStub.returns(Promise.resolve({width: 350, height: 200, type: 'jpg'}));
+            resetProbeImageSize = Amperize.__set__('probeImageSize', probeImageSizeStub);
 
             amperize.parse('<img src="http://somestockwebsite.com/image.jpg" layout="fixed">', function (error, result) {
                 expect(result).to.exist;
@@ -180,15 +192,15 @@ describe('Amperize', function () {
         it('transforms <img> into <amp-img> when no file extension is given', function (done) {
             // This test is mocked, but works with this specific example.
             // You can comment out the mocks and the test should still pass.
-            sizeOfMock = nock('https://www.zomato.com')
+            imageSizeMock = nock('https://www.zomato.com')
                 .matchHeader('User-Agent', /Mozilla\/.*Safari\/.*/)
                 .get('/logo/18163505/minilogo')
                 .reply(200, {
                     body: '<Buffer 89 50 4e 47 0d 0a 1a 0a 00 00 00 0d 49 48 44 52 00 00 00 68 00 00 00 0f 08 02 00 00 00 87 8f 1d 14 00 00 03 33 49 44 41 54 58 c3 ed 97 6b 48 93 51 18>'
                 });
 
-            sizeOfStub.returns({width: 104, height: 15, type: 'png'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+            probeImageSizeStub.returns(Promise.resolve({width: 104, height: 15, type: 'png'}));
+            resetProbeImageSize = Amperize.__set__('probeImageSize', probeImageSizeStub);
 
             amperize.parse('<img src="https://www.zomato.com/logo/18163505/minilogo">', function (error, result) {
                 expect(result).to.exist;
@@ -202,14 +214,63 @@ describe('Amperize', function () {
             });
         });
 
-        it('returns largest image value for .ico files', function (done) {
-            sizeOfMock = nock('https://somewebsite.com')
+        it('falls back to image-size for unprobable images', function (done) {
+            imageSizeMock = nock('https://somewebsite.com')
                 .get('/favicon.ico')
-                .reply(200, {
-                    body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
-                });
+                .replyWithFile(200, path.join(__dirname, 'fixtures/multi-size.ico'));
 
-            sizeOfStub.returns({
+            amperize.parse('<img src="https://somewebsite.com/favicon.ico">', function (error, result) {
+                expect(result).to.exist;
+                expect(result).to.contain('<amp-img');
+                expect(result).to.contain('src="https://somewebsite.com/favicon.ico"');
+                expect(result).to.contain('layout="fixed"');
+                expect(result).to.contain('width="256"');
+                expect(result).to.contain('height="256"');
+                expect(result).to.contain('</amp-img>');
+                done();
+            });
+        });
+
+        it('falls back to image-size for unprobable images (uppercase extension)', function (done) {
+            imageSizeMock = nock('https://somewebsite.com')
+                .get('/favicon.ICO')
+                .replyWithFile(200, path.join(__dirname, 'fixtures/multi-size.ico'));
+
+            amperize.parse('<img src="https://somewebsite.com/favicon.ICO">', function (error, result) {
+                expect(result).to.exist;
+                expect(result).to.contain('<amp-img');
+                expect(result).to.contain('src="https://somewebsite.com/favicon.ICO"');
+                expect(result).to.contain('layout="fixed"');
+                expect(result).to.contain('width="256"');
+                expect(result).to.contain('height="256"');
+                expect(result).to.contain('</amp-img>');
+                done();
+            });
+        });
+
+        it('falls back to image-size for unprobable images (query param)', function (done) {
+            imageSizeMock = nock('https://somewebsite.com')
+                .get('/favicon.ICO?v=1')
+                .replyWithFile(200, path.join(__dirname, 'fixtures/multi-size.ico'));
+
+            amperize.parse('<img src="https://somewebsite.com/favicon.ICO?v=1">', function (error, result) {
+                expect(result).to.exist;
+                expect(result).to.contain('<amp-img');
+                expect(result).to.contain('src="https://somewebsite.com/favicon.ICO?v=1"');
+                expect(result).to.contain('layout="fixed"');
+                expect(result).to.contain('width="256"');
+                expect(result).to.contain('height="256"');
+                expect(result).to.contain('</amp-img>');
+                done();
+            });
+        });
+
+        it('returns largest image value for .ico files', function (done) {
+            imageSizeMock = nock('https://somewebsite.com')
+                .get('/favicon.ico')
+                .replyWithFile(200, path.join(__dirname, 'fixtures/multi-size.ico'));
+
+            probeImageSizeStub.returns(Promise.resolve({
                 width: 32,
                 height: 32,
                 type: 'ico',
@@ -218,8 +279,8 @@ describe('Amperize', function () {
                     {width: 32, height: 32},
                     {width: 16, height: 16}
                 ]
-            });
-            Amperize.__set__('sizeOf', sizeOfStub);
+            }));
+            resetProbeImageSize = Amperize.__set__('sizeOf', probeImageSizeStub);
 
             amperize.parse('<img src="https://somewebsite.com/favicon.ico">', function (error, result) {
                 expect(result).to.exist;
@@ -233,15 +294,37 @@ describe('Amperize', function () {
             });
         });
 
+        // TODO: adapt code to not trigger parallel requests for the same image
+        it.skip('uses cached size rather than extra requests for duplicated images in html', function (done) {
+            var GIF1x1 = Buffer.from('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==', 'base64');
+            var secondImageSizeMock;
+
+            imageSizeMock = nock('http://example.com')
+                .get('/image.jpg')
+                .reply(200, GIF1x1);
+
+            secondImageSizeMock = nock('http://example.com')
+                .get('/image.jpg')
+                .reply(200, GIF1x1);
+
+            amperize.parse('<img src="http://example.com/image.jpg"><img src="http://example.com/image.jpg">', function (error, result) {
+                expect(imageSizeMock.isDone()).to.equal(true);
+                expect(secondImageSizeMock.isDone()).to.equal(false);
+                expect(result).to.exist;
+                expect(result).to.match(/<amp-img\s.*<amp-img/);
+                done();
+            });
+        });
+
         it('transforms .gif <img> with only height property into <amp-anim></amp-anim> with full dimensions by overriding them', function (done) {
-            sizeOfMock = nock('https://media.giphy.com')
+            imageSizeMock = nock('https://media.giphy.com')
                 .get('/media/l46CtzgjhTm29Cbjq/giphy.gif')
                 .reply(200, {
                     body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
                 });
 
-            sizeOfStub.returns({width: 800, height: 600, type: 'gif'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+            probeImageSizeStub.returns(Promise.resolve({width: 800, height: 600, type: 'gif'}));
+            resetProbeImageSize = Amperize.__set__('probeImageSize', probeImageSizeStub);
 
             amperize.parse('<img src="https://media.giphy.com/media/l46CtzgjhTm29Cbjq/giphy.gif" height="500">', function (error, result) {
                 expect(result).to.exist;
@@ -256,10 +339,10 @@ describe('Amperize', function () {
         });
 
         it('transforms <iframe> with only width property into <amp-iframe></amp-iframe> with full dimensions without overriding them', function (done) {
-            amperize.parse('<iframe src="https://www.youtube.com/embed/HMQkV5cTuoY" width="400"></iframe>', function (error, result) {
+            amperize.parse('<iframe src="https://giphy.com/embed/3oEduKP4VaUxJvLwuA" width="400"></iframe>', function (error, result) {
                 expect(result).to.exist;
                 expect(result).to.contain('<amp-iframe');
-                expect(result).to.contain('src="https://www.youtube.com/embed/HMQkV5cTuoY"');
+                expect(result).to.contain('src="https://giphy.com/embed/3oEduKP4VaUxJvLwuA"');
                 expect(result).to.contain('layout="responsive"');
                 expect(result).to.contain('width="400"');
                 expect(result).to.contain('height="400"');
@@ -270,10 +353,10 @@ describe('Amperize', function () {
         });
 
         it('transforms <iframe> with only height property into <amp-iframe></amp-iframe> with full dimensions without overriding them', function (done) {
-            amperize.parse('<iframe src="https://www.youtube.com/embed/HMQkV5cTuoY" height="400"></iframe>', function (error, result) {
+            amperize.parse('<iframe src="https://giphy.com/embed/3oEduKP4VaUxJvLwuA" height="400"></iframe>', function (error, result) {
                 expect(result).to.exist;
                 expect(result).to.contain('<amp-iframe');
-                expect(result).to.contain('src="https://www.youtube.com/embed/HMQkV5cTuoY"');
+                expect(result).to.contain('src="https://giphy.com/embed/3oEduKP4VaUxJvLwuA"');
                 expect(result).to.contain('layout="responsive"');
                 expect(result).to.contain('width="600"');
                 expect(result).to.contain('height="400"');
@@ -283,11 +366,40 @@ describe('Amperize', function () {
             });
         });
 
+        it('transforms <iframe> with youtube URL to <amp-youtube></amp-youtube>', function (done) {
+            amperize.parse('<iframe src="https://www.youtube.com/embed/HMQkV5cTuoY" height="400"></iframe>', function (error, result) {
+                expect(result).to.exist;
+                expect(result).to.contain('<amp-youtube');
+                expect(result).to.contain('data-videoid="HMQkV5cTuoY"');
+                expect(result).to.contain('layout="responsive"');
+                expect(result).to.contain('width="600"');
+                expect(result).to.contain('height="400"');
+                expect(result).to.contain('</amp-youtube>');
+                done();
+            });
+        });
+
+        it('transforms <iframe> with youtube URL to <amp-youtube></amp-youtube> removing disallowed attributes', function (done) {
+            amperize.parse('<iframe src="https://www.youtube.com/embed/HMQkV5cTuoY" allowfullscreen frameborder="0" allow="" height="400"></iframe>', function (error, result) {
+                expect(result).to.exist;
+                expect(result).to.contain('<amp-youtube');
+                expect(result).to.contain('data-videoid="HMQkV5cTuoY"');
+                expect(result).to.contain('layout="responsive"');
+                expect(result).to.contain('width="600"');
+                expect(result).to.contain('height="400"');
+                expect(result).to.contain('</amp-youtube>');
+                expect(result).to.not.contain('allowfullscreen');
+                expect(result).to.not.contain('frameborder');
+                expect(result).to.not.contain('allow');
+                done();
+            });
+        });
+
         it('transforms <iframe> with sandbox property into <amp-iframe></amp-iframe> with full dimensions without overriding them', function (done) {
-            amperize.parse('<iframe src="https://www.youtube.com/embed/HMQkV5cTuoY" sandbox="allow-scripts"></iframe>', function (error, result) {
+            amperize.parse('<iframe src="https://giphy.com/embed/3oEduKP4VaUxJvLwuA" sandbox="allow-scripts"></iframe>', function (error, result) {
                 expect(result).to.exist;
                 expect(result).to.contain('<amp-iframe');
-                expect(result).to.contain('src="https://www.youtube.com/embed/HMQkV5cTuoY"');
+                expect(result).to.contain('src="https://giphy.com/embed/3oEduKP4VaUxJvLwuA"');
                 expect(result).to.contain('layout="responsive"');
                 expect(result).to.contain('width="600"');
                 expect(result).to.contain('height="400"');
@@ -313,7 +425,7 @@ describe('Amperize', function () {
         });
 
         it('adds \'https\' protocol to <iframe> if only \'http\' protocol is supplied', function (done) {
-            var url = '<iframe src="http://giphy.com/embed/3oEduKP4VaUxJvLwuA" width="480" height="372" frameBorder="0" class="giphy-embed" allowFullScreen></iframe><p><a href="http://giphy.com/gifs/afv-funny-fail-lol-3oEduKP4VaUxJvLwuA">via GIPHY</a></p></p>';
+            var url = '<iframe src="http://giphy.com/embed/3oEduKP4VaUxJvLwuA" width="480" height="372" frameBorder="0" class="giphy-embed" allowFullScreen></iframe><p><a href="http://giphy.com/gifs/afv-funny-fail-lol-3oEduKP4VaUxJvLwuA">via GIPHY</a></p>';
             amperize.parse(url, function (error, result) {
                 expect(result).to.exist;
                 expect(result).to.contain('<amp-iframe');
@@ -396,77 +508,81 @@ describe('Amperize', function () {
             });
         });
 
-        it('can handle redirects', function (done) {
-            var secondSizeOfMock;
+        it('transforms all src urls in <amp-audio> to https', function (done) {
+            amperize.parse('<audio src="//foo.ogg"><source type="audio/mpeg" src="http://foo.mp3"><track kind="captions" src="http://foo.en.vtt" srclang="en" label="English"><track kind="captions" src="http://foo.sv.vtt" srclang="sv" label="Svenska"></audio>', function (error, result) {
+                expect(result).to.exist;
+                expect(result).to.contain('<amp-audio src="https://foo.ogg">');
+                expect(result).to.contain('<source type="audio/mpeg" src="https://foo.mp3">');
+                expect(result).to.contain('<track kind="captions" src="https://foo.en.vtt" srclang="en" label="English">');
+                expect(result).to.contain('<track kind="captions" src="https://foo.sv.vtt" srclang="sv" label="Svenska">');
+                expect(result).to.contain('</amp-audio>');
+                done();
+            });
+        })
 
-            sizeOfMock = nock('http://noimagehere.com')
+        it('can handle redirects', function (done) {
+            var secondImageSizeMock;
+            var GIF1x1 = Buffer.from('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==', 'base64');
+
+            imageSizeMock = nock('http://noimagehere.com')
                 .get('/files/f/feedough/x/11/1540353_20925115.jpg')
                 .reply(301, {
-                    body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
+                    body: ''
                 },
                 {
                     location: 'http://someredirectedurl.com/files/f/feedough/x/11/1540353_20925115.jpg'
                 });
 
-            secondSizeOfMock = nock('http://someredirectedurl.com')
+            secondImageSizeMock = nock('http://someredirectedurl.com')
                 .get('/files/f/feedough/x/11/1540353_20925115.jpg')
-                .reply(200, {
-                    body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
-                });
-
-            sizeOfStub.returns({width: 100, height: 100, type: 'jpg'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+                .reply(200, GIF1x1);
 
             amperize.parse('<img src="http://noimagehere.com/files/f/feedough/x/11/1540353_20925115.jpg">', function (error, result) {
-                expect(sizeOfMock.isDone()).to.be.equal(true);
-                expect(secondSizeOfMock.isDone()).to.be.equal(true);
+                expect(imageSizeMock.isDone()).to.be.equal(true, 'imageSizeMock isn\'t done');
+                expect(secondImageSizeMock.isDone()).to.be.equal(true, 'secondImageSizeMock isn\'t done');
                 expect(error).to.be.null;
-                expect(result).to.contain('<amp-img src="http://noimagehere.com/files/f/feedough/x/11/1540353_20925115.jpg" width="100" height="100" layout="fixed"></amp-img>');
+                expect(result).to.contain('<amp-img src="http://noimagehere.com/files/f/feedough/x/11/1540353_20925115.jpg" width="1" height="1" layout="fixed"></amp-img>');
                 done();
             });
         });
 
         it('can handle request errors', function (done) {
-            sizeOfMock = nock('http://example.com')
+            imageSizeMock = nock('http://example.com')
                 .get('/images/IMG_xyz.jpg')
                 .reply(404, {message: 'something awful happened', code: 'AWFUL_ERROR'});
 
             amperize.parse('<img src="http://example.com/images/IMG_xyz.jpg">', function (error, result) {
                 expect(error).to.be.null;
-                expect(result).to.contain('<img src="http://example.com/images/IMG_xyz.jpg');
+                expect(result).to.contain('<img src="http://example.com/images/IMG_xyz.jpg">');
                 done();
             });
         });
 
-        it('can handle errors of image-size module', function (done) {
-            sizeOfMock = nock('http://example.com')
+        it('can handle errors of probe-image-size module', function (done) {
+            // will throw ProbeError: unrecognized file format
+            imageSizeMock = nock('http://example.com')
                 .get('/images/IMG_xyz.jpg')
-                .reply(200, {
-                    body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
-                });
-            sizeOfStub.throws({error: 'image-size could not find dimensions'});
-            Amperize.__set__('sizeOf', sizeOfStub);
+                .reply(200, 'not an image');
 
             amperize.parse('<img src="http://example.com/images/IMG_xyz.jpg">', function (error, result) {
                 expect(error).to.be.null;
-                expect(result).to.contain('<img src="http://example.com/images/IMG_xyz.jpg');
+                expect(result).to.contain('<img src="http://example.com/images/IMG_xyz.jpg">');
                 done();
             });
         });
 
         it('can handle timeout errors', function (done) {
             this.timeout(3500);
+            var GIF1x1 = Buffer.from('R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==', 'base64');
 
-            sizeOfMock = nock('http://example.com')
+            imageSizeMock = nock('http://example.com')
                 .get('/images/IMG_xyz.jpg')
                 .delay(3500)
-                .reply(200, {
-                    body: '<Buffer 2c be a4 40 f7 87 73 1e 57 2c c1 e4 0d 79 03 95 42 f0 42 2e 41 95 27 c9 5c 35 a7 71 2c 09 5a 57 d3 04 1e 83 03 28 07 96 b0 c8 88 65 07 7a d1 d6 63 50>'
-                });
+                .reply(200, GIF1x1);
 
             amperize.parse('<img src="http://example.com/images/IMG_xyz.jpg">', function (error, result) {
                 expect(error).to.be.null;
-                expect(result).to.contain('<img src="http://example.com/images/IMG_xyz.jpg');
+                expect(result).to.contain('<img src="http://example.com/images/IMG_xyz.jpg">');
                 done();
             });
         });
